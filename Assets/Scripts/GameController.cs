@@ -881,6 +881,9 @@ public class GameController : MonoBehaviour {
                     case 8192:
                         GameSprites[ix, iy].spriteName = theme + "8192";
                         break;
+                    case 16384:
+                        GameSprites[ix, iy].spriteName = theme + "16384";
+                        break;
                 }
                 
             }
