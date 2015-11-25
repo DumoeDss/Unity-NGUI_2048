@@ -966,7 +966,6 @@ public class GameController : MonoBehaviour {
                             }
                             iMap[ix, ia] = 0;
                             isMove = true;
-
                         }
                         isGameOver();
                         break;
