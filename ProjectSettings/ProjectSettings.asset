@@ -84,7 +84,7 @@ PlayerSettings:
     16:9: 1
     Others: 1
   bundleIdentifier: com.DumoeDss.Modaka2048
-  bundleVersion: 2.3.0
+  bundleVersion: 2.3.5
   preloadedAssets: []
   metroEnableIndependentInputSource: 0
   metroEnableLowLatencyPresentationAPI: 0

@@ -5,7 +5,167 @@ using Mono.Data.Sqlite;
 
 public class GameController : MonoBehaviour {
 
+    public const int Cloume=4;    
+    private int[,] iMap = new int[Cloume, Cloume];
+    private int[,] backMap;
+    public static int[,] saveMap = new int[Cloume, Cloume]; 
+    private bool isMove = false;
+    private static string Theme="Madoka";
+    private static string strBackground = "默认";
+    private int Score = 0;
+    private int BestScore = 0;
+    private bool isNewBestScore = false;
+    private string appDBPath;
+    private bool isSaveOrLoad = true;
+
+    //游戏元素
+    private UISprite[,] GameSprites = new UISprite[Cloume, Cloume];
+    //游戏退出面板，游戏结束面板，游戏设置面板
+    //标题样式
+    private UISprite TitleSprite;
+    private UISprite SaveGamePanel;
+    private UISprite SetGamePanel;
+    private UISprite QuitGamePanel;
+    private UISprite GameOverPanel;
+    private UISprite GameMenuWidget;
+    private UISprite StartGameWidget;
+    private UIPopupList ThemeList;
+    private UIPopupList BGList;
+
+    private UILabel MainScoreLabel;
+    private UILabel MainBestScoreLabel;
+    private UILabel GameOverScoreLabel;
+    private UILabel RandomLabel;
+    private UILabel GameDataBtnName1;
+    private UILabel GameDataBtnName2;
+    private UILabel GameDataBtnName3;
+    private UILabel SaveOrLoadLabel;
+    private UILabel[] GameDataBtnName = new UILabel[4];
+    private UIButton QuitGameBtn;
+    private UIButton StartGameBtn;
+    private UIButton LoadGameBtn;
+    private UIButton SetGameBtn;
+    private UIButton ReturnSettingBtn;
+    private UIButton ReturnMenuBtn;
+    private UIButton BackUpBtn;
+    private UIButton SaveGameBtn;
+    private UIButton ReStartBtn;
+
+    private string GameSettingDbName = "GameSetting";
+    private string GameSaveDataDbName = "GameSaveData";
+    private DbAccess db;
+    private string dbName;
+
+    void Start()
+    {
+        //设置数据库存储路径
+        appDBPath = Application.persistentDataPath + "/" + "Madoka.db";
+        //如果数据库不存在，从unity中拷贝
+        if (!File.Exists(appDBPath))
+        {
+            //用www先从Unity中下载到数据库  
+            WWW loadDB = new WWW("jar:file://" + Application.dataPath + "!/assets/" + "Madoka.db");
+            bool boo = true;
+            while (boo)
+            {
+                if (loadDB.isDone)
+                {
+                    //拷贝至规定的地方  
+                    File.WriteAllBytes(appDBPath, loadDB.bytes);
+                    boo = false;
+                }
+            }
+
+        }
+        dbName = "URI=file:" + appDBPath;
+
+#if UNITY_EDITOR
+        //编辑器的话，路径设置成这样
+        dbName = "data source = Madoka.db";
+#endif
+
+        db = new DbAccess(dbName);
+        IsTableExist(db);
+        db.DisConnectDb();
+        LoadSetting();
+        InitGameSprite();
+    }
+   
+    void Update()
+    {
+        GameMove();
+        if ((Application.platform == RuntimePlatform.Android && (Input.GetKeyDown(KeyCode.Escape)) && StartGameWidget.gameObject.activeSelf == true) || Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (StartGameWidget.gameObject.activeSelf == true)
+            {
+                if (QuitGamePanel.gameObject.activeSelf == false && GameOverPanel.gameObject.activeSelf == false && SaveGamePanel.gameObject.activeSelf == false && SetGamePanel.gameObject.activeSelf == false)
+                {
+                    SetBtnState(false);
+                    QuitGamePanel.gameObject.SetActive(true);
+
+                }
+                else if (QuitGamePanel.gameObject.activeSelf == true)
+                {
+                    SetBtnState(true);
+                    QuitGamePanel.gameObject.SetActive(false);
+                }
+                else if (GameOverPanel.gameObject.activeSelf == true)
+                {
+                    SetBtnState(true);
+                    GameOverPanel.gameObject.SetActive(false);
+                }
+                else if (SaveGamePanel.gameObject.activeSelf == true)
+                {
+                    SetBtnState(true);
+                    SaveGamePanel.gameObject.SetActive(false);
+                }
+                else if (SetGamePanel.gameObject.activeSelf == true)
+                {
+                    SetBtnState(true);
+                    SetGamePanel.gameObject.SetActive(false);
+                }
+
+            }
+            if (SaveGamePanel.gameObject.activeSelf == true)
+            {
+                SetBtnState(true);
+                SaveGamePanel.gameObject.SetActive(false);
+            }
+            if (SetGamePanel.gameObject.activeSelf == true)
+            {
+                SetBtnState(true);
+                SetGamePanel.gameObject.SetActive(false);
+            }
+        }
+    }
+
+    //查看数据库中表是否存在
+    private void IsTableExist(DbAccess db)
+    {
+        //查看数据库中是否有 游戏设置 表，没有的话则创建并初始化设置
+        if (!db.IsTableExist(GameSettingDbName))
+        {
+#if UNITY_EDITOR
+            print("游戏设置表不存在");
+#endif
+            db.CreateTable(GameSettingDbName, new string[] { "BestScore", "Background", "Theme" }, new string[] { "varchar(20)", "varchar(20)", "varchar(20)" });
+
+            ChangeSetting();
+        }
+
+        //查看数据库中是否有 游戏数据 表，没有的话则创建
+        if (!db.IsTableExist(GameSaveDataDbName))
+        {
+#if UNITY_EDITOR
+            print("游戏数据表不存在");
+#endif
+            db.CreateTable(GameSaveDataDbName, new string[] { "TableIndex", "GameMap", "Score" }, new string[] { "varchar(2)", "varchar(20)", "varchar(20)" });
+        }
+    }
+
+    #region 游戏的移动操作
 #if UNITY_EDITOR || !(UNITY_IPHONE || UNITY_ANDROID || UNITY_BLACKBERRY || UNITY_WP8)
+    //编辑器靠上下左右键
     private void GameMove()
     {
         if (Input.anyKeyDown)
@@ -33,10 +193,11 @@ public class GameController : MonoBehaviour {
                 backMap = (int[,])iMap.Clone();
                 SwipeDown();
                 DrawMap(Theme);
-            }           
+            }
         }
     }
 #elif UNITY_IPHONE || UNITY_ANDROID || UNITY_BLACKBERRY || UNITY_WP8
+    //触屏靠两次触摸的差距
     private Vector2 firstPosition = Vector2.zero, lastPosition = Vector2.zero, offSet = Vector2.zero;
     private void GameMove()
     {
@@ -85,240 +246,13 @@ public class GameController : MonoBehaviour {
     }
    
 #endif
-
-    public const int Cloume=4;    
-    private int[,] iMap = new int[Cloume, Cloume];
-    private int[,] backMap;
-    public static int[,] saveMap = new int[Cloume, Cloume]; 
-    private bool isMove = false;
-    private static string Theme="Madoka";
-    private static string BackGround = "默认";
-    private int Score = 0;
-    private int BestScore = 0;
-    private bool isNewBestScore = false;
-    private static string path;
-    private string appDBPath;
-
-    //游戏元素
-    private UISprite[,] GameSprites = new UISprite[Cloume, Cloume];
-    //游戏退出面板，游戏结束面板，游戏设置面板
-    private UISprite TestSprite;
-    //标题样式
-    private UISprite TitleSprite;
-    private UIWidget BGSprite;
-    private UISprite SaveGamePanel;
-    private UISprite SetGamePanel;
-    private UISprite QuitGamePanel;
-    private UISprite GameOverPanel;
-    private UISprite GameMenuWidget;
-    private UISprite StartGameWidget;
-    private UIPopupList ThemeList;
-    private UIPopupList BGList;
-
-    private UILabel MainScoreLabel;
-    private UILabel MainBestScoreLabel;
-    private UILabel GameOverScoreLabel;
-    private UILabel RandomLabel;
-    private UILabel GameDataBtnName1;
-    private UILabel GameDataBtnName2;
-    private UILabel GameDataBtnName3;
-    private UILabel SaveOrLoadLabel;
-    private UILabel TestLabel;
-    private UILabel[] GameDataBtnName = new UILabel[4];
-    private UIButton QuitGameBtn;
-    private UIButton StartGameBtn;
-    private UIButton LoadGameBtn;
-    private UIButton SetGameBtn;
-    private UIButton ReturnSettingBtn;
-    private UIButton ReturnMenuBtn;
-    private UIButton BackUpBtn;
-    private UIButton SaveGameBtn;
-    private UIButton ReStartBtn;
-
-
-
-    private string GameSettingDbName = "GameSetting";
-    private string GameSaveDataDbName = "GameSaveData";
-    private DbAccess db;
-    private string dbName;
-
-    void Start()
-    {
-        //TestSprite = this.transform.parent.Find("Test").GetComponent<UISprite>();
-        //TestLabel = this.transform.parent.Find("Test/Label").GetComponent<UILabel>();
-
-        appDBPath = Application.persistentDataPath + "/" + "Madoka.db";
-        if (!File.Exists(appDBPath))
-        {
-            //用www先从Unity中下载到数据库  
-            WWW loadDB = new WWW("jar:file://" + Application.dataPath + "!/assets/" + "Madoka.db");
-            bool boo = true;
-            while (boo)
-            {
-                if (loadDB.isDone)
-                {
-                    //拷贝至规定的地方  
-                    File.WriteAllBytes(appDBPath, loadDB.bytes);
-                    boo = false;
-                }
-            }
-
-        }
-        dbName = "URI=file:" + appDBPath;
-#if UNITY_EDITOR
-        dbName = "data source = Madoka.db";
-#endif
-
-        //try
-        //{
-        db = new DbAccess(dbName);
-        IsSettingTableExist(db);
-        IsGameSaveTableExist(db);
-        db.DisConnectDb();
-
-        path = Application.persistentDataPath;
-
-        LoadSetting();
-        InitGameSprite();
-
-
-        //}
-        //catch (System.Exception e)
-        //{
-        //    TestSprite.gameObject.SetActive(true);
-        //    TestLabel.text = e.ToString();
-        //}
-    }
-    
-    private void IsSettingTableExist(DbAccess db)
-    {
-        if (!db.IsTableExist(GameSettingDbName))
-        {
-#if UNITY_EDITOR
-            print("表不存在");
-#endif
-            db.CreateTable(GameSettingDbName, new string[] { "BestScore", "Background", "Theme" }, new string[] { "varchar(20)", "varchar(20)", "varchar(20)" });
-
-            ChangeSetting();
-        }
-    }
-
-    private void IsGameSaveTableExist(DbAccess db)
-    {
-        if (!db.IsTableExist(GameSaveDataDbName))
-        {
-#if UNITY_EDITOR
-            print("表不存在");
-#endif
-            db.CreateTable(GameSaveDataDbName, new string[] {"TableIndex", "GameMap", "Score" }, new string[] { "varchar(2)","varchar(20)", "varchar(20)" });
-            //SaveGame("2,0,0,0;0,2,0,0;0,0,0,0;0,0,0,0", "0");
-        }
-    }
-
-
-    #region Update()
-    //对玩家操作做出反应
-    void Update()
-    {
-        GameMove();
-
-
-        if ((Application.platform == RuntimePlatform.Android && (Input.GetKeyDown(KeyCode.Escape)) && StartGameWidget.gameObject.activeSelf == true) || Input.GetKeyDown(KeyCode.Escape))
-        {
-            if (StartGameWidget.gameObject.activeSelf == true)
-            {
-                //&& 
-                if(QuitGamePanel.gameObject.activeSelf == false&&GameOverPanel.gameObject.activeSelf == false&& SaveGamePanel.gameObject.activeSelf == false&& SetGamePanel.gameObject.activeSelf == false)
-                {
-                    //ReturnMenuBtnClick();
-                    SetBtnState(false);
-                    QuitGamePanel.gameObject.SetActive(true);
-                    
-                }
-                else if (QuitGamePanel.gameObject.activeSelf == true)
-                {
-                    SetBtnState(true);
-                    QuitGamePanel.gameObject.SetActive(false);
-                }
-                else if (GameOverPanel.gameObject.activeSelf == true)
-                {
-                    SetBtnState(true);
-                    GameOverPanel.gameObject.SetActive(false);
-                }
-                else if (SaveGamePanel.gameObject.activeSelf == true)
-                {
-                    SetBtnState(true);
-                    SaveGamePanel.gameObject.SetActive(false);
-                }
-                else if (SetGamePanel.gameObject.activeSelf == true)
-                {
-                    SetBtnState(true);
-                    SetGamePanel.gameObject.SetActive(false);
-                }
-                
-            }
-                //QuitPannel
-            
-            if (SaveGamePanel.gameObject.activeSelf == true)
-            {
-                SetBtnState(true);
-                SaveGamePanel.gameObject.SetActive(false);
-            }
-            if (SetGamePanel.gameObject.activeSelf == true)
-            {
-                SetBtnState(true);
-                SetGamePanel.gameObject.SetActive(false);
-            }
-        }
-    }
     #endregion
 
-
-    private void SelectTable(string table_name,out string[] strData)
+    #region 对数据库操作的封装
+    private void SelectTable(string table_name, out string[] strData)
     {
         DbAccess db = new DbAccess(dbName);
         SqliteDataReader SqliteReader = db.SelectTable(table_name);
-        object[] objData = new object[SqliteReader.FieldCount];
-        
-        int fieldCount = SqliteReader.GetValues(objData);
-        strData=new string[fieldCount];
-        for (int i = 0; i < fieldCount; i++) {
-            strData[i] = objData[i].ToString();
-#if UNITY_EDITOR
-            print(strData[i]);
-#endif
-        }
-        db.DisConnectDb();
-    }
-    private void SelectTable(string table_name,string item, out string[] strData)
-    {
-        DbAccess db = new DbAccess(dbName);
-        SqliteDataReader SqliteReader = db.SelectTable(table_name);
-        strData = new string[4];
-        if (SqliteReader.HasRows)
-        {           
-            while (SqliteReader.Read())
-            {
-                object[] objData = new object[SqliteReader.FieldCount];
-
-                int fieldCount = SqliteReader.GetValues(objData);
-                
-                
-                strData[int.Parse(objData[0].ToString())] = objData[2].ToString();
-                
-#if UNITY_EDITOR
-                print(strData[int.Parse(objData[0].ToString())]);
-#endif
-                
-            }
-           
-        }
-        db.DisConnectDb();
-    }
-    private void SelectTable(string table_name,int keyvalue,out string[] strData,string keyfiled="TableIndex")
-    {
-        DbAccess db = new DbAccess(dbName);
-        SqliteDataReader SqliteReader = db.SelectTable(table_name,keyfiled,keyvalue);
         object[] objData = new object[SqliteReader.FieldCount];
 
         int fieldCount = SqliteReader.GetValues(objData);
@@ -326,15 +260,41 @@ public class GameController : MonoBehaviour {
         for (int i = 0; i < fieldCount; i++)
         {
             strData[i] = objData[i].ToString();
-#if UNITY_EDITOR
-            print(strData[i]);
-#endif
+        }
+        db.DisConnectDb();
+    }
+    private void SelectTable(string table_name, string item, out string[] strData)
+    {
+        DbAccess db = new DbAccess(dbName);
+        SqliteDataReader SqliteReader = db.SelectTable(table_name);
+        strData = new string[4];
+        if (SqliteReader.HasRows)
+        {
+            while (SqliteReader.Read())
+            {
+                object[] objData = new object[SqliteReader.FieldCount];
+                int fieldCount = SqliteReader.GetValues(objData);
+                strData[int.Parse(objData[0].ToString())] = objData[2].ToString();
+            }
+        }
+        db.DisConnectDb();
+    }
+    private void SelectTable(string table_name, int keyvalue, out string[] strData, string keyfiled = "TableIndex")
+    {
+        DbAccess db = new DbAccess(dbName);
+        SqliteDataReader SqliteReader = db.SelectTable(table_name, keyfiled, keyvalue);
+        object[] objData = new object[SqliteReader.FieldCount];
 
+        int fieldCount = SqliteReader.GetValues(objData);
+        strData = new string[fieldCount];
+        for (int i = 0; i < fieldCount; i++)
+        {
+            strData[i] = objData[i].ToString();
         }
         db.DisConnectDb();
     }
 
-    private void InsertTable(string table_name,string[] strFiled, string[] strValue)
+    private void InsertTable(string table_name, string[] strFiled, string[] strValue)
     {
         DbAccess db = new DbAccess(dbName);
         db.InsertTable(table_name, strFiled, strValue);
@@ -347,12 +307,14 @@ public class GameController : MonoBehaviour {
         db.UpdateTable(table_name, strFiled, strValue);
         db.DisConnectDb();
     }
-    private void UpdateTable(string table_name, string[] strFiled, string[] strValue, string strKeyFiled,string strKeyValue )
+    private void UpdateTable(string table_name, string[] strFiled, string[] strValue, string strKeyFiled, string strKeyValue)
     {
         DbAccess db = new DbAccess(dbName);
         db.UpdateTable(table_name, strFiled, strValue, strKeyFiled, strKeyValue);
         db.DisConnectDb();
     }
+    #endregion
+
 
     //读取游戏设置
     private void LoadSetting()
@@ -360,10 +322,11 @@ public class GameController : MonoBehaviour {
         string[] strSetting;
         SelectTable(GameSettingDbName, out strSetting);       
         BestScore = int.Parse(strSetting[0]);       
-        BackGround = strSetting[1];     
+        strBackground = strSetting[1];     
         Theme = strSetting[2];
     }
 
+    //读取游戏
     private void LoadGame(int DataIndex)
     {
         string[] strData;
@@ -372,10 +335,12 @@ public class GameController : MonoBehaviour {
         Score = int.Parse(strData[2]);
     }
 
+    #region 地图模式的转换
+    //将字符串模式的地图转换成二维数组模式
     System.StringSplitOptions ssop = System.StringSplitOptions.RemoveEmptyEntries;
-    private void SplitStrMap(string strMap,out int[,] a)
+    private void SplitStrMap(string strMap, out int[,] a)
     {
-        a = new int[Cloume,Cloume];
+        a = new int[Cloume, Cloume];
         string[] MapOrignX = strMap.Split(new char[] { ';' }, ssop);
         for (int i = 0; i < MapOrignX.Length; ++i)
         {
@@ -387,12 +352,13 @@ public class GameController : MonoBehaviour {
             }
         }
     }
-    private void MapToString(int[,] intMap,out string outStrMap)
+    //将二维数组模式的地图转换成字符串模式
+    private void MapToString(int[,] intMap, out string outStrMap)
     {
         outStrMap = "";
         for (int ix = 0; ix < Cloume; ++ix)
         {
-            for(int iy = 0; iy < Cloume; ++iy)
+            for (int iy = 0; iy < Cloume; ++iy)
             {
                 outStrMap = outStrMap.Trim() + intMap[ix, iy];
                 if (iy != Cloume - 1)
@@ -402,7 +368,9 @@ public class GameController : MonoBehaviour {
                 outStrMap += ";";
         }
     }
+    #endregion
 
+    //初始化游戏设置
     private void ChangeSetting()
     {
         string[] strFileds = new string[] { "BestScore", "Background", "Theme"};
@@ -410,11 +378,13 @@ public class GameController : MonoBehaviour {
         InsertTable(GameSettingDbName, strFileds, strValues);
     }
 
+    //更新数据库中的游戏设置
     public void ChangeSetting(string strFiled, string strValue)
     {
         UpdateTable(GameSettingDbName, strFiled, strValue);       
     }
 
+    //更新数据库中的游戏数据
     //保存游戏在空栏位
     private void NewSaveGame(string strGameMap, string strScore, int SaveIndex)
     {
@@ -422,21 +392,15 @@ public class GameController : MonoBehaviour {
         string[] strValues = new string[] { SaveIndex.ToString(), strGameMap, strScore };       
         InsertTable(GameSaveDataDbName, strFileds, strValues);
     }
-
     //保存游戏到已有栏位
     private void SaveGame(string strGameMap,string strScore,int SaveIndex)
     {
         string[] strFiled = new string[] { "TableIndex", "GameMap", "Score" };
         string[] strValue = new string[] { SaveIndex.ToString(), strGameMap, strScore };        
         UpdateTable(GameSaveDataDbName, strFiled, strValue, "TableIndex", SaveIndex.ToString());
-    }
+    }  
 
-    public void CloseSaveGamePannelBtnClick()
-    {
-        SetBtnState(true);
-        SaveGamePanel.gameObject.SetActive(false);
-    }
-
+    //显示其他面板时，设置底层的按钮无法点击
     private void SetBtnState(bool isTrue)
     {
         StartGameBtn.isEnabled = isTrue;
@@ -450,11 +414,7 @@ public class GameController : MonoBehaviour {
         ReStartBtn.isEnabled = isTrue;
     }
 
-    private bool isSaveOrLoad=true;
-
-    
-
-
+    //初始化地图数组
     private void InitIMap()
     {
         Score = 0;
@@ -466,11 +426,13 @@ public class GameController : MonoBehaviour {
             }
         }
     }
+
+    //初始化游戏Sprite
     private void InitGameSprite()
     {
         GameMenuWidget = this.transform.parent.Find("GameMenu").GetComponent<UISprite>();
         StartGameWidget = this.transform.parent.Find("StartGame").GetComponent<UISprite>();
-        StartGameWidget.spriteName = BackGround;
+        StartGameWidget.spriteName = strBackground;
         SetGamePanel = this.transform.parent.Find("SetGamePanel").GetComponent<UISprite>();
         SaveGamePanel = this.transform.parent.Find("SaveGamePanel").GetComponent<UISprite>();
         QuitGamePanel = this.transform.parent.Find("QuitGamePanel").GetComponent<UISprite>();
@@ -528,18 +490,9 @@ public class GameController : MonoBehaviour {
         #endregion
     }
 
-    public void StartGameBtnClick()
-    {
-        InitIMap();
-        AddSprite();
-        AddSprite();
-        DrawMap(Theme);
-        MainBestScoreLabel.text = BestScore.ToString();
-        GameMenuWidget.gameObject.SetActive(false);
 
-        StartGameWidget.gameObject.SetActive(true);
-    }
-
+    #region 读取保存游戏的操作
+    //读取保存游戏时，显示每个数据栏的状态
     private bool[] isGameDataNull = new bool[4];
     private void ShowGameData(UILabel[] GameDataBtnName)
     {
@@ -557,56 +510,13 @@ public class GameController : MonoBehaviour {
                 GameDataBtnName[i].text = "无记录";
                 isGameDataNull[i] = true;
             }
-               
+
         }
     }
 
-    
-   
-    private void InitGameDataBtn()
-    {
-        GameDataBtnName[1] = GameDataBtnName1;
-        GameDataBtnName[2] = GameDataBtnName2;
-        GameDataBtnName[3] = GameDataBtnName3;
-    }
-    public void LoadGameBtnClick()
-    {
-        isSaveOrLoad = false;
-        SaveOrLoadLabel.text = "读取游戏";        
-        ShowGameData(GameDataBtnName);
-        SetBtnState(false);
-
-        SaveGamePanel.gameObject.SetActive(true);
-    }
-    public void SaveGameBtnClick()
-    {
-        //if (QuitGamePanel.gameObject.activeSelf == true)
-        //{
-        //    QuitGamePanel.gameObject.SetActive(false);
-        //}
-        isSaveOrLoad = true;
-        SaveOrLoadLabel.text = "保存游戏";       
-        ShowGameData(GameDataBtnName);
-        SetBtnState(false);
-        SaveGamePanel.gameObject.SetActive(true);
-    }
-    public void GameDataBtn1Click()
-    {
-        GameDataSaveLoad(1, isSaveOrLoad, isGameDataNull[1]);
-    }
-
-    public void GameDataBtn2Click()
-    {
-        GameDataSaveLoad(2, isSaveOrLoad, isGameDataNull[2]);
-    }
-
-    public void GameDataBtn3Click()
-    {
-        GameDataSaveLoad(3, isSaveOrLoad, isGameDataNull[3]);
-    }
     private void GameDataSaveLoad(int DataIndex, bool isSave, bool isDataNull)
     {
-        if (isSave)
+        if (isSave)     //保存游戏
         {
             string strMap = "";
 
@@ -615,18 +525,16 @@ public class GameController : MonoBehaviour {
             if (isDataNull)
             {
                 NewSaveGame(strMap, Score.ToString(), DataIndex);
-
             }
             else
             {
                 SaveGame(strMap, Score.ToString(), DataIndex);
-
             }
             ShowGameData(GameDataBtnName);
             SetBtnState(true);
             SaveGamePanel.gameObject.SetActive(false);
         }
-        else
+        else    //读取游戏
         {
             if (isDataNull)
                 return;
@@ -645,58 +553,46 @@ public class GameController : MonoBehaviour {
 
         }
     }
+    #endregion       
 
+    #region 按键点击事件
+    #region 菜单界面
+    //开始游戏
+    public void StartGameBtnClick()
+    {
+        InitIMap();
+        AddSprite();
+        AddSprite();
+        DrawMap(Theme);
+        MainBestScoreLabel.text = BestScore.ToString();
+        GameMenuWidget.gameObject.SetActive(false);
+        StartGameWidget.gameObject.SetActive(true);
+    }
+    //读取游戏
+    public void LoadGameBtnClick()
+    {
+        isSaveOrLoad = false;
+        SaveOrLoadLabel.text = "读取游戏";
+        ShowGameData(GameDataBtnName);
+        SetBtnState(false);
+
+        SaveGamePanel.gameObject.SetActive(true);
+    }
+    //设置游戏
     public void SetGameBtnClick()
     {
         SetBtnState(false);
         SetGamePanel.gameObject.SetActive(true);
     }
-    
-    public void ChangeSetBtnClick()
+    //退出游戏
+    public void QuitGame()
     {
-        //print(ThemeList.value.Trim());
-        string strTheme="";
-        string strBackground="";
-
-        strBackground = BGList.value.Trim();
-        switch (ThemeList.value.Trim())
-        {
-            case "魔法少女小圆":
-                strTheme = "Madoka";
-                break;
-            case "小圆2":
-                strTheme = "Homura";
-                break;
-            case "LoveLive":
-                strTheme = "LoveLive";
-                break;
-            case "偶像大师":
-                strTheme = "偶像大师";
-                break;
-        }
-        StartGameWidget.spriteName = strBackground;
-        ChangeSetting("Background", strBackground);
-        if (strTheme != Theme)
-        {
-            Theme = strTheme;
-            ChangeSetting("Theme", strTheme);
-            if(StartGameWidget.gameObject.activeSelf==true)
-                DrawMap(Theme);
-
-        }
-        SetBtnState(true);
-        SetGamePanel.gameObject.SetActive(false);
-        //ChangeSetting("Theme", strTheme);
-        //ChangeSetting("BackGround", strBackground);
-
-
+        Application.Quit();
     }
-    public void CloseSetGamePanelBtnClick()
-    {
-        SetBtnState(true);
-        SetGamePanel.gameObject.SetActive(false);
-    }
-   
+    #endregion
+
+    #region 开始游戏
+    //返回菜单
     public void ReturnMenuBtnClick()
     {
         SetBtnState(true);
@@ -707,90 +603,31 @@ public class GameController : MonoBehaviour {
             isNewBestScore = false;
         }
         StartGameWidget.gameObject.SetActive(false);
-        GameMenuWidget.gameObject.SetActive(true);        
+        GameMenuWidget.gameObject.SetActive(true);
     }
 
-    public void ReturnGameBtnClick()
+    //保存游戏
+    public void SaveGameBtnClick()
     {
-        SetBtnState(true);
-        QuitGamePanel.gameObject.SetActive(false);
-    }
-
-    public void ChangeTheme(string strTheme)
-    {
-        Theme = strTheme;
-    }
-
-    public void QuitGame()
-    {
-        Application.Quit();
-    }
-
-    //向地图中随机添加一个元素
-    private void AddSprite()
-    {
-        int rx, ry;
-        rx = Random.Range(0, 4);
-        ry = Random.Range(0, 4);
-        if (iMap[rx, ry] == 0)
-        {
-            int ri = Random.Range(1, 101);
-            iMap[rx, ry] =(ri > 90) ?  4 :  2;
-        }
-        else AddSprite();
-        GameOver();
-    }
-
-    //检测游戏是否结束
-    private bool isGameOver()
-    {
-        for (int ix = 0; ix < Cloume; ++ix)
-        {
-            for (int iy = 0; iy < Cloume; ++iy)
-            {
-                //1.如果还有位置为0，则游戏未结束。
-                //2.如果所有的元素都不为0，判断是否有元素与上下左右相同，如果木有则游戏结束。
-                if (iMap[ix, iy] == 0 || (ix > 0 && iMap[ix, iy] == iMap[ix - 1, iy]) || (ix < 3 && iMap[ix, iy] == iMap[ix + 1, iy])
-                    || (iy > 0 && iMap[ix, iy] == iMap[ix, iy - 1]) || (iy < 3 && iMap[ix, iy] == iMap[ix, iy + 1]))
-                {
-                    return false;
-                }
-
-            }
-        }
-        return true;
-    }
-
-    //显示游戏结束面板
-    private void GameOver()
-    {
-        if (isGameOver())
-        {
-            GameOverScoreLabel.text = Score+"";
-            RandomLabel.text = "离最高分还差" + (BestScore - Score) + "分~";
-            if (isNewBestScore)
-            {
-                //新记录
-                RandomLabel.text = "新纪录~";
-                ChangeSetting("BestScore", BestScore.ToString());
-            }
-            SetBtnState(false);
-            GameOverPanel.gameObject.SetActive(true);
-        }
+        isSaveOrLoad = true;
+        SaveOrLoadLabel.text = "保存游戏";
+        ShowGameData(GameDataBtnName);
+        SetBtnState(false);
+        SaveGamePanel.gameObject.SetActive(true);
     }
 
     //重新开始
     public void GameReStart()
     {
-        
+
         if (isNewBestScore)
         {
             isNewBestScore = false;
             ChangeSetting("BestScore", BestScore.ToString());
         }
-        for(int ix = 0; ix < Cloume; ++ix)
+        for (int ix = 0; ix < Cloume; ++ix)
         {
-            for(int iy = 0; iy < Cloume; ++iy)
+            for (int iy = 0; iy < Cloume; ++iy)
             {
                 iMap[ix, iy] = 0;
             }
@@ -822,6 +659,110 @@ public class GameController : MonoBehaviour {
         catch (System.Exception)
         {
             return;
+        }
+    }
+
+    //退出游戏->继续游戏
+    public void ReturnGameBtnClick()
+    {
+        SetBtnState(true);
+        QuitGamePanel.gameObject.SetActive(false);
+    }
+    #endregion
+
+    #region 读取游戏/保存游戏
+    public void GameDataBtn1Click()
+    {
+        GameDataSaveLoad(1, isSaveOrLoad, isGameDataNull[1]);
+    }
+    public void GameDataBtn2Click()
+    {
+        GameDataSaveLoad(2, isSaveOrLoad, isGameDataNull[2]);
+    }
+    public void GameDataBtn3Click()
+    {
+        GameDataSaveLoad(3, isSaveOrLoad, isGameDataNull[3]);
+    }
+    #endregion
+
+    #region 设置游戏
+    //保存设置
+    public void ChangeSetBtnClick()
+    {
+        string strTheme = "";
+        strBackground = BGList.value.Trim();
+        switch (ThemeList.value.Trim())
+        {
+            case "魔法少女小圆":
+                strTheme = "Madoka";
+                break;
+            case "小圆2":
+                strTheme = "Homura";
+                break;
+            case "LoveLive":
+                strTheme = "LoveLive";
+                break;
+        }
+        StartGameWidget.spriteName = strBackground;
+        ChangeSetting("Background", strBackground);
+        if (strTheme != Theme)
+        {
+            Theme = strTheme;
+            ChangeSetting("Theme", strTheme);
+            if (StartGameWidget.gameObject.activeSelf == true)
+                DrawMap(Theme);
+        }
+        SetBtnState(true);
+        SetGamePanel.gameObject.SetActive(false);
+    }
+    //继续游戏
+    public void CloseSetGamePanelBtnClick()
+    {
+        SetBtnState(true);
+        SetGamePanel.gameObject.SetActive(false);
+    }
+
+    #endregion
+
+    public void CloseSaveGamePannelBtnClick()
+    {
+        SetBtnState(true);
+        SaveGamePanel.gameObject.SetActive(false);
+    }
+    #endregion
+
+
+
+    //向地图中随机添加一个元素
+    private void AddSprite()
+    {
+        int rx, ry;
+        rx = Random.Range(0, 4);
+        ry = Random.Range(0, 4);
+        if (iMap[rx, ry] == 0)
+        {
+            int ri = Random.Range(1, 101);
+            iMap[rx, ry] =(ri > 90) ?  4 :  2;
+        }
+        else AddSprite();
+        GameOver();
+    }
+
+    //显示游戏结束面板
+    private void GameOver()
+    {
+        if (isGameOver())
+        {
+            GameOverScoreLabel.text = Score+"";
+            RandomLabel.text = "离最高分还差" + (BestScore - Score) + "分~";
+            if (isNewBestScore)
+            {
+                //新记录
+                RandomLabel.text = "新纪录~";
+                ChangeSetting("BestScore", BestScore.ToString());
+            }
+            SetBtnState(false);
+            GameOverPanel.gameObject.SetActive(true);
         }
     }
 
@@ -891,6 +832,26 @@ public class GameController : MonoBehaviour {
     }
 
     #endregion
+
+    //检测游戏是否结束
+    private bool isGameOver()
+    {
+        for (int ix = 0; ix < Cloume; ++ix)
+        {
+            for (int iy = 0; iy < Cloume; ++iy)
+            {
+                //1.如果还有位置为0，则游戏未结束。
+                //2.如果所有的元素都不为0，判断是否有元素与上下左右相同，如果木有则游戏结束。
+                if (iMap[ix, iy] == 0 || (ix > 0 && iMap[ix, iy] == iMap[ix - 1, iy]) || (ix < 3 && iMap[ix, iy] == iMap[ix + 1, iy])
+                    || (iy > 0 && iMap[ix, iy] == iMap[ix, iy - 1]) || (iy < 3 && iMap[ix, iy] == iMap[ix, iy + 1]))
+                {
+                    return false;
+                }
+
+            }
+        }
+        return true;
+    }
 
     #region 移动
     private void SwipeRight()
