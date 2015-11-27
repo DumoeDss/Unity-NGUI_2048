@@ -696,7 +696,7 @@ public class GameController : MonoBehaviour {
             case "魔法少女小圆":
                 strTheme = "Madoka";
                 break;
-            case "小圆2":
+            case "晓美焰":
                 strTheme = "Homura";
                 break;
             case "LoveLive":
