@@ -7021,6 +7021,7 @@ MonoBehaviour:
   alignment: 2
   items:
   - "\u9B54\u6CD5\u5C11\u5973\u5C0F\u5706"
+  - "\u6653\u7F8E\u7130"
   padding: {x: 4, y: 4}
   textColor: {r: .513725519, g: .513725519, b: .513725519, a: 1}
   backgroundColor: {r: 1, g: 1, b: 1, a: 1}
