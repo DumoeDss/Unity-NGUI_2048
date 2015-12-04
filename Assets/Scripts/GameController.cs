@@ -8,6 +8,7 @@ public class GameController : MonoBehaviour {
     public const int Cloume=4;    
     private int[,] iMap = new int[Cloume, Cloume];
     private int[,] backMap;
+    private int backScore=0;
     public static int[,] saveMap = new int[Cloume, Cloume]; 
     private bool isMove = false;
     private static string Theme="Madoka";
@@ -172,24 +173,28 @@ public class GameController : MonoBehaviour {
         {
             if (Input.GetKeyDown(KeyCode.RightArrow))
             {
+                backScore = Score;
                 backMap = (int[,])iMap.Clone();
                 SwipeRight();
                 DrawMap(Theme);
             }
             else if (Input.GetKeyDown(KeyCode.LeftArrow))
             {
+                backScore = Score;
                 backMap = (int[,])iMap.Clone();
                 SwipeLeft();
                 DrawMap(Theme);
             }
             else if (Input.GetKeyDown(KeyCode.UpArrow))
             {
+                backScore = Score;
                 backMap = (int[,])iMap.Clone();
                 SwipeUp();
                 DrawMap(Theme);
             }
             else if (Input.GetKeyDown(KeyCode.DownArrow))
             {
+                backScore = Score;
                 backMap = (int[,])iMap.Clone();
                 SwipeDown();
                 DrawMap(Theme);
@@ -651,7 +656,9 @@ public class GameController : MonoBehaviour {
         {
             if (isMove)
             {
+                Score = backScore;
                 iMap = (int[,])backMap.Clone();
+                MainScoreLabel.text = Score + "";
                 DrawMap(Theme);
                 isMove = false;
             }
@@ -824,6 +831,18 @@ public class GameController : MonoBehaviour {
                         break;
                     case 16384:
                         GameSprites[ix, iy].spriteName = theme + "16384";
+                        break;
+                    case 32768:
+                        GameSprites[ix, iy].spriteName = theme + "32768";
+                        break;
+                    case 65536:
+                        GameSprites[ix, iy].spriteName = theme + "65536";
+                        break;
+                    case 131072:
+                        GameSprites[ix, iy].spriteName = theme + "131072";
+                        break;
+                    case 262144:
+                        GameSprites[ix, iy].spriteName = theme + "262144";
                         break;
                 }
                 
