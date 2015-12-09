@@ -222,11 +222,13 @@ public class GameController : MonoBehaviour {
                 {
                     if (offSet.x >= 5.0f)
                     {
+                        backScore = Score;
                         backMap = (int[,])iMap.Clone();
                         SwipeRight();
                     }
                     else if (offSet.x <= -5.0f)
                     {
+                        backScore = Score;
                         backMap = (int[,])iMap.Clone();
                         SwipeLeft();
 
@@ -236,11 +238,13 @@ public class GameController : MonoBehaviour {
                 {
                     if (offSet.y >= 5.0f)
                     {
+                        backScore = Score;
                         backMap = (int[,])iMap.Clone();
                         SwipeUp();
                     }
                     else if (offSet.y <= -5.0f)
                     {
+                        backScore = Score;
                         backMap = (int[,])iMap.Clone();
                         SwipeDown();
                     }
@@ -420,16 +424,17 @@ public class GameController : MonoBehaviour {
     }
 
     //初始化地图数组
-    private void InitIMap()
+    private void InitIMap(int[,] map)
     {
         Score = 0;
         for (int ix = 0; ix < Cloume; ++ix)
         {
             for(int iy = 0; iy < Cloume; ++iy)
             {
-                iMap[ix, iy] = 0;
+                map[ix, iy] = 0;               
             }
         }
+        
     }
 
     //初始化游戏Sprite
@@ -565,10 +570,11 @@ public class GameController : MonoBehaviour {
     //开始游戏
     public void StartGameBtnClick()
     {
-        InitIMap();
+        InitIMap(iMap);
         AddSprite();
         AddSprite();
         DrawMap(Theme);
+        MainScoreLabel.text = Score + "";
         MainBestScoreLabel.text = BestScore.ToString();
         GameMenuWidget.gameObject.SetActive(false);
         StartGameWidget.gameObject.SetActive(true);
@@ -601,7 +607,8 @@ public class GameController : MonoBehaviour {
     public void ReturnMenuBtnClick()
     {
         SetBtnState(true);
-        InitIMap();
+        InitIMap(backMap);
+        isMove = false;
         if (isNewBestScore)
         {
             ChangeSetting("BestScore", BestScore.ToString());
@@ -630,14 +637,7 @@ public class GameController : MonoBehaviour {
             isNewBestScore = false;
             ChangeSetting("BestScore", BestScore.ToString());
         }
-        for (int ix = 0; ix < Cloume; ++ix)
-        {
-            for (int iy = 0; iy < Cloume; ++iy)
-            {
-                iMap[ix, iy] = 0;
-            }
-        }
-        Score = 0;
+        InitIMap(iMap);
         MainScoreLabel.text = Score.ToString();
         AddSprite();
         AddSprite();
